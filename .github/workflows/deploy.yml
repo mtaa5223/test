@@ -169,7 +169,7 @@ jobs:
             DB_POOL_SIZE=${{ secrets.DEV_DB_POOL_SIZE }}
             UGS_PROJECT_ID=${{ secrets.UGS_PROJECT_ID }}
             UGS_ISSUER=${{ secrets.UGS_ISSUER }}
-            UGS_JWKS_URL=${{ secrets.UGS_JWKS_URL }}
+            UGS_JWKS_URL=${{ secrets.UGS_JWKS_URL }} 
 
   # ──────────────────────────────────────
   # 3. main → 수동 승인 후 배포
