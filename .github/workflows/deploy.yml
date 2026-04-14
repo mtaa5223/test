@@ -13,11 +13,25 @@ env:
 
 jobs:
   # ──────────────────────────────────────
-  # 0. 사전 검증
+  # 0. 사전 검증 + 시작 알림
   # ──────────────────────────────────────
   validate:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
+      - name: Notify Telegram (start)
+        shell: bash
+        run: |
+          curl -s -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            --data-urlencode "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=🚀 <b>Build Started</b>
+          Repo: ${{ github.repository }}
+          Branch: <code>${{ github.ref_name }}</code>
+          Actor: ${{ github.actor }}
+          Commit: ${{ github.event.head_commit.message }}
+          Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
       - name: Check required secrets
         shell: bash
         run: |
@@ -49,32 +63,16 @@ jobs:
           fi
           echo "All required secrets are set."
 
-      - name: Check required tools
-        shell: bash
-        run: |
-          MISSING=""
-          if ! command -v docker &> /dev/null; then
-            MISSING="${MISSING}\n  - docker"
-          fi
-          if ! command -v gcloud &> /dev/null; then
-            MISSING="${MISSING}\n  - gcloud"
-          fi
-          if [ -n "$MISSING" ]; then
-            echo "::error::빌드 컴퓨터에 필수 도구가 없습니다:${MISSING}"
-            exit 1
-          fi
-          echo "Docker version: $(docker --version)"
-          echo "gcloud version: $(gcloud --version | head -1)"
-
   # ──────────────────────────────────────
   # 1. 빌드 + Registry push (공통)
   # ──────────────────────────────────────
   build:
     needs: validate
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     outputs:
       deploy_image: ${{ steps.config.outputs.deploy_image }}
       service_name: ${{ steps.config.outputs.service_name }}
+      tags: ${{ steps.config.outputs.tags }}
 
     steps:
       - name: Checkout
@@ -114,6 +112,9 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
       - name: Configure Docker for Artifact Registry
         shell: bash
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
@@ -136,18 +137,13 @@ jobs:
             docker push "${tag}"
           done
 
-      - name: Clean up old Docker images
-        shell: bash
-        if: always()
-        run: docker image prune -f
-
   # ──────────────────────────────────────
   # 2. develop → 자동 배포
   # ──────────────────────────────────────
   deploy-dev:
     needs: build
     if: github.ref_name == 'develop'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: Authenticate to GCP
@@ -169,7 +165,7 @@ jobs:
             DB_POOL_SIZE=${{ secrets.DEV_DB_POOL_SIZE }}
             UGS_PROJECT_ID=${{ secrets.UGS_PROJECT_ID }}
             UGS_ISSUER=${{ secrets.UGS_ISSUER }}
-            UGS_JWKS_URL=${{ secrets.UGS_JWKS_URL }} 
+            UGS_JWKS_URL=${{ secrets.UGS_JWKS_URL }}
 
   # ──────────────────────────────────────
   # 3. main → 수동 승인 후 배포
@@ -177,7 +173,7 @@ jobs:
   deploy-prod:
     needs: build
     if: github.ref_name == 'main'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment: production  # GitHub 환경 보호 규칙 → 승인 필요
 
     steps:
@@ -201,3 +197,52 @@ jobs:
             UGS_PROJECT_ID=${{ secrets.UGS_PROJECT_ID }}
             UGS_ISSUER=${{ secrets.UGS_ISSUER }}
             UGS_JWKS_URL=${{ secrets.UGS_JWKS_URL }}
+
+  # ──────────────────────────────────────
+  # 4. 결과 알림 (성공/실패)
+  # ──────────────────────────────────────
+  notify:
+    needs: [validate, build, deploy-dev, deploy-prod]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine overall status
+        id: status
+        shell: bash
+        run: |
+          V="${{ needs.validate.result }}"
+          B="${{ needs.build.result }}"
+          DD="${{ needs.deploy-dev.result }}"
+          DP="${{ needs.deploy-prod.result }}"
+
+          if [ "$V" = "failure" ] || [ "$B" = "failure" ] || [ "$DD" = "failure" ] || [ "$DP" = "failure" ]; then
+            echo "status=failure" >> "$GITHUB_OUTPUT"
+            echo "emoji=❌" >> "$GITHUB_OUTPUT"
+            echo "label=Failed" >> "$GITHUB_OUTPUT"
+          elif [ "$V" = "cancelled" ] || [ "$B" = "cancelled" ] || [ "$DD" = "cancelled" ] || [ "$DP" = "cancelled" ]; then
+            echo "status=cancelled" >> "$GITHUB_OUTPUT"
+            echo "emoji=⚠️" >> "$GITHUB_OUTPUT"
+            echo "label=Cancelled" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=success" >> "$GITHUB_OUTPUT"
+            echo "emoji=✅" >> "$GITHUB_OUTPUT"
+            echo "label=Success" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify Telegram (result)
+        shell: bash
+        run: |
+          curl -s -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            --data-urlencode "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=${{ steps.status.outputs.emoji }} <b>Build ${{ steps.status.outputs.label }}</b>
+          Repo: ${{ github.repository }}
+          Branch: <code>${{ github.ref_name }}</code>
+          Actor: ${{ github.actor }}
+          Commit: ${{ github.event.head_commit.message }}
+          validate: ${{ needs.validate.result }}
+          build: ${{ needs.build.result }}
+          deploy-dev: ${{ needs.deploy-dev.result }}
+          deploy-prod: ${{ needs.deploy-prod.result }}
+          Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
