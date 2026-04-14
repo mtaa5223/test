@@ -1,7 +1,7 @@
 FROM eclipse-temurin:21-jdk-jammy AS builder
 WORKDIR /app
 COPY . .
-RUN ./gradlew installDist --no-daemon
+RUN chmod +x gradlew && ./gradlew installDist --no-daemon
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
