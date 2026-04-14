@@ -1,0 +1,203 @@
+name: Build and Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main, develop]
+
+env:
+  REGISTRY: asia-northeast3-docker.pkg.dev
+  PROJECT_ID: helical-ion-460310-m0
+  REPOSITORY: test
+  IMAGE_NAME: trinity-server
+  REGION: asia-northeast3
+
+jobs:
+  # ──────────────────────────────────────
+  # 0. 사전 검증
+  # ──────────────────────────────────────
+  validate:
+    runs-on: self-hosted
+    steps:
+      - name: Check required secrets
+        shell: bash
+        run: |
+          MISSING=""
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            MISSING="${MISSING}\n  - GCP_SA_KEY"
+          fi
+
+          BRANCH=${GITHUB_REF_NAME}
+          if [ "$BRANCH" = "develop" ]; then
+            PREFIX="DEV"
+          elif [ "$BRANCH" = "main" ]; then
+            PREFIX="PROD"
+          fi
+
+          if [ -z "${{ secrets.DEV_DB_URL }}${{ secrets.PROD_DB_URL }}" ]; then
+            MISSING="${MISSING}\n  - ${PREFIX}_DB_URL"
+          fi
+          if [ -z "${{ secrets.DEV_DB_USER }}${{ secrets.PROD_DB_USER }}" ]; then
+            MISSING="${MISSING}\n  - ${PREFIX}_DB_USER"
+          fi
+          if [ -z "${{ secrets.DEV_DB_PASSWORD }}${{ secrets.PROD_DB_PASSWORD }}" ]; then
+            MISSING="${MISSING}\n  - ${PREFIX}_DB_PASSWORD"
+          fi
+
+          if [ -n "$MISSING" ]; then
+            echo "::error::필수 Secret이 설정되지 않았습니다:${MISSING}"
+            exit 1
+          fi
+          echo "All required secrets are set."
+
+      - name: Check required tools
+        shell: bash
+        run: |
+          MISSING=""
+          if ! command -v docker &> /dev/null; then
+            MISSING="${MISSING}\n  - docker"
+          fi
+          if ! command -v gcloud &> /dev/null; then
+            MISSING="${MISSING}\n  - gcloud"
+          fi
+          if [ -n "$MISSING" ]; then
+            echo "::error::빌드 컴퓨터에 필수 도구가 없습니다:${MISSING}"
+            exit 1
+          fi
+          echo "Docker version: $(docker --version)"
+          echo "gcloud version: $(gcloud --version | head -1)"
+
+  # ──────────────────────────────────────
+  # 1. 빌드 + Registry push (공통)
+  # ──────────────────────────────────────
+  build:
+    needs: validate
+    runs-on: self-hosted
+    outputs:
+      deploy_image: ${{ steps.config.outputs.deploy_image }}
+      service_name: ${{ steps.config.outputs.service_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set image tags and environment
+        id: config
+        shell: bash
+        run: |
+          FULL_IMAGE="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}"
+          SHORT_SHA=${GITHUB_SHA::7}
+          BRANCH=${GITHUB_REF_NAME}
+
+          TAGS="${FULL_IMAGE}:${SHORT_SHA}"
+
+          if [ "$BRANCH" = "main" ]; then
+            TAGS="${TAGS},${FULL_IMAGE}:latest"
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -n "$VERSION" ]; then
+              TAGS="${TAGS},${FULL_IMAGE}:${VERSION}"
+            fi
+            echo "service_name=trinity-server-prod" >> "$GITHUB_OUTPUT"
+          elif [ "$BRANCH" = "develop" ]; then
+            TAGS="${TAGS},${FULL_IMAGE}:dev-latest"
+            TAGS="${TAGS},${FULL_IMAGE}:dev-${SHORT_SHA}"
+            echo "service_name=trinity-server-dev" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "deploy_image=${FULL_IMAGE}:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Generated tags: ${TAGS}"
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        shell: bash
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Build Docker image
+        shell: bash
+        run: |
+          IFS=',' read -ra TAG_ARRAY <<< "${{ steps.config.outputs.tags }}"
+          BUILD_ARGS=""
+          for tag in "${TAG_ARRAY[@]}"; do
+            BUILD_ARGS="${BUILD_ARGS} -t ${tag}"
+          done
+          docker build ${BUILD_ARGS} .
+
+      - name: Push Docker image
+        shell: bash
+        run: |
+          IFS=',' read -ra TAG_ARRAY <<< "${{ steps.config.outputs.tags }}"
+          for tag in "${TAG_ARRAY[@]}"; do
+            docker push "${tag}"
+          done
+
+      - name: Clean up old Docker images
+        shell: bash
+        if: always()
+        run: docker image prune -f
+
+  # ──────────────────────────────────────
+  # 2. develop → 자동 배포
+  # ──────────────────────────────────────
+  deploy-dev:
+    needs: build
+    if: github.ref_name == 'develop'
+    runs-on: self-hosted
+
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy to Cloud Run (dev)
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ needs.build.outputs.service_name }}
+          image: ${{ needs.build.outputs.deploy_image }}
+          region: ${{ env.REGION }}
+          env_vars: |
+            APP_ENV=develop
+            DB_URL=${{ secrets.DEV_DB_URL }}
+            DB_USER=${{ secrets.DEV_DB_USER }}
+            DB_PASSWORD=${{ secrets.DEV_DB_PASSWORD }}
+            DB_POOL_SIZE=${{ secrets.DEV_DB_POOL_SIZE }}
+            UGS_PROJECT_ID=${{ secrets.UGS_PROJECT_ID }}
+            UGS_ISSUER=${{ secrets.UGS_ISSUER }}
+            UGS_JWKS_URL=${{ secrets.UGS_JWKS_URL }}
+
+  # ──────────────────────────────────────
+  # 3. main → 수동 승인 후 배포
+  # ──────────────────────────────────────
+  deploy-prod:
+    needs: build
+    if: github.ref_name == 'main'
+    runs-on: self-hosted
+    environment: production  # GitHub 환경 보호 규칙 → 승인 필요
+
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy to Cloud Run (prod)
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ needs.build.outputs.service_name }}
+          image: ${{ needs.build.outputs.deploy_image }}
+          region: ${{ env.REGION }}
+          env_vars: |
+            APP_ENV=production
+            DB_URL=${{ secrets.PROD_DB_URL }}
+            DB_USER=${{ secrets.PROD_DB_USER }}
+            DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
+            DB_POOL_SIZE=${{ secrets.PROD_DB_POOL_SIZE }}
+            UGS_PROJECT_ID=${{ secrets.UGS_PROJECT_ID }}
+            UGS_ISSUER=${{ secrets.UGS_ISSUER }}
+            UGS_JWKS_URL=${{ secrets.UGS_JWKS_URL }}

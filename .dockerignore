@@ -1,0 +1,23 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.local.conf
+
+# Build output
+build/
+.gradle/
+
+# VCS / IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+
+# Docs / misc
+docs/
+*.md

@@ -47,7 +47,5 @@ bin/
 .env.*.local
 *.local.conf
 
-# Docker (CI/CD에서 별도 관리)
-Dockerfile
+# Docker (로컬 개발 환경용만 제외)
 docker-compose.yml
-.dockerignore
