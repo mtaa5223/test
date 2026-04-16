@@ -16,7 +16,7 @@ jobs:
   # 0. 사전 검증 + 시작 알림
   # ──────────────────────────────────────
   validate:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Notify Telegram (start)
         shell: bash
@@ -73,6 +73,7 @@ jobs:
       deploy_image: ${{ steps.config.outputs.deploy_image }}
       service_name: ${{ steps.config.outputs.service_name }}
       tags: ${{ steps.config.outputs.tags }}
+
 
     steps:
       - name: Checkout
