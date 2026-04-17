@@ -226,7 +226,7 @@ jobs:
             echo "label=Cancelled" >> "$GITHUB_OUTPUT"
           else
             echo "status=success" >> "$GITHUB_OUTPUT"
-            echo "emoji=✅" >> "$GITHUB_OUTPUT"
+            echo "emoji=" >> "$GITHUB_OUTPUT"
             echo "label=Success" >> "$GITHUB_OUTPUT"
           fi
 
