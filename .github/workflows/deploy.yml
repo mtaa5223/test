@@ -218,7 +218,7 @@ jobs:
 
           if [ "$V" = "failure" ] || [ "$B" = "failure" ] || [ "$DD" = "failure" ] || [ "$DP" = "failure" ]; then
             echo "status=failure" >> "$GITHUB_OUTPUT"
-            echo "emoji=❌" >> "$GITHUB_OUTPUT"
+            echo "emoji=" >> "$GITHUB_OUTPUT"
             echo "label=Failed" >> "$GITHUB_OUTPUT"
           elif [ "$V" = "cancelled" ] || [ "$B" = "cancelled" ] || [ "$DD" = "cancelled" ] || [ "$DP" = "cancelled" ]; then
             echo "status=cancelled" >> "$GITHUB_OUTPUT"
