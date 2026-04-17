@@ -68,7 +68,7 @@ jobs:
   # ──────────────────────────────────────
   build:
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       deploy_image: ${{ steps.config.outputs.deploy_image }}
       service_name: ${{ steps.config.outputs.service_name }}
@@ -144,7 +144,7 @@ jobs:
   deploy-dev:
     needs: build
     if: github.ref_name == 'develop'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Authenticate to GCP
@@ -174,7 +174,7 @@ jobs:
   deploy-prod:
     needs: build
     if: github.ref_name == 'main'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: production  # GitHub 환경 보호 규칙 → 승인 필요
 
     steps:
@@ -205,7 +205,7 @@ jobs:
   notify:
     needs: [validate, build, deploy-dev, deploy-prod]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Determine overall status
         id: status
