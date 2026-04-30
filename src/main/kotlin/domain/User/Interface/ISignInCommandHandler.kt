@@ -1,7 +1,9 @@
-﻿package com.example.domain.User.Interface
+package com.example.domain.User.Interface
 
 import com.example.domain.User.Command.SignInUserCommand
+import com.example.domain.User.Result.SignInUserResult
+import org.jooq.Configuration
 
 interface ISignInCommandHandler {
-    fun executeAsync(command: SignInUserCommand)
+    fun execute(cfg: Configuration, command: SignInUserCommand): SignInUserResult
 }
