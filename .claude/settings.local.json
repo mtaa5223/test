@@ -4,7 +4,10 @@
       "Bash(unzip -p \"/c/Users/mtaa5/.gradle/caches/modules-2/files-2.1/io.ktor/ktor-server-core-jvm/3.4.1/b65e9dc4232519b9c82e9abc04c3e1db8fc8efe2/ktor-server-core-jvm-3.4.1-sources.jar\" io/ktor/server/application/Events.kt)",
       "Bash(unzip -l \"/c/Users/mtaa5/.gradle/caches/modules-2/files-2.1/io.ktor/ktor-server-core-jvm/3.4.1/b65e9dc4232519b9c82e9abc04c3e1db8fc8efe2/ktor-server-core-jvm-3.4.1-sources.jar\")",
       "Bash(unzip *)",
-      "Bash(./gradlew compileKotlin --no-daemon)"
+      "Bash(./gradlew compileKotlin --no-daemon)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "Bash(openssl rand *)"
     ]
   }
 }
