@@ -21,11 +21,21 @@ object DataFactory {
             password = db.property("password").getString()
             driverClassName = "org.postgresql.Driver"
             maximumPoolSize = db.property("poolSize").getString().toInt()
+
+            // Hikari가 startup에 실제 connection을 강제로 만들지 않도록 한다.
+            // Neon serverless가 cold-start 중일 때 module() 블록이 30초 이상 멈추는 걸 방지.
+            initializationFailTimeout = -1
+            connectionTimeout = 30_000
+
+            // Neon은 TLS 필수.
+            addDataSourceProperty("sslmode", "require")
         }
 
         dataSource = HikariDataSource(hikariConfig)
         context = DSL.using(dataSource, SQLDialect.POSTGRES)
+    }
 
+    fun runMigrations() {
         Flyway.configure()
             .dataSource(dataSource)
             .baselineOnMigrate(true)
