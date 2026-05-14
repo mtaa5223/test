@@ -56,6 +56,12 @@ jobs:
           if [ -z "${{ secrets.DEV_DB_PASSWORD }}${{ secrets.PROD_DB_PASSWORD }}" ]; then
             MISSING="${MISSING}\n  - ${PREFIX}_DB_PASSWORD"
           fi
+          if [ -z "${{ secrets.DEV_APP_JWT_SECRET }}${{ secrets.PROD_APP_JWT_SECRET }}" ]; then
+            MISSING="${MISSING}\n  - ${PREFIX}_APP_JWT_SECRET"
+          fi
+          if [ -z "${{ secrets.DEV_UGS_ENV_ID }}${{ secrets.PROD_UGS_ENV_ID }}" ]; then
+            MISSING="${MISSING}\n  - ${PREFIX}_UGS_ENV_ID"
+          fi
 
           if [ -n "$MISSING" ]; then
             echo "::error::필수 Secret이 설정되지 않았습니다:${MISSING}"
@@ -165,8 +171,10 @@ jobs:
             DB_PASSWORD=${{ secrets.DEV_DB_PASSWORD }}
             DB_POOL_SIZE=${{ secrets.DEV_DB_POOL_SIZE }}
             UGS_PROJECT_ID=${{ secrets.UGS_PROJECT_ID }}
+            UGS_ENV_ID=${{ secrets.DEV_UGS_ENV_ID }}
             UGS_ISSUER=${{ secrets.UGS_ISSUER }}
             UGS_JWKS_URL=${{ secrets.UGS_JWKS_URL }}
+            APP_JWT_SECRET=${{ secrets.DEV_APP_JWT_SECRET }}
 
   # ──────────────────────────────────────
   # 3. main → 수동 승인 후 배포
@@ -196,8 +204,10 @@ jobs:
             DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
             DB_POOL_SIZE=${{ secrets.PROD_DB_POOL_SIZE }}
             UGS_PROJECT_ID=${{ secrets.UGS_PROJECT_ID }}
+            UGS_ENV_ID=${{ secrets.PROD_UGS_ENV_ID }}
             UGS_ISSUER=${{ secrets.UGS_ISSUER }}
             UGS_JWKS_URL=${{ secrets.UGS_JWKS_URL }}
+            APP_JWT_SECRET=${{ secrets.PROD_APP_JWT_SECRET }}
 
   # ──────────────────────────────────────
   # 4. 결과 알림 (성공/실패)
