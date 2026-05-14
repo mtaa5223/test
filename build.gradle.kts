@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "2.3.10"
+    kotlin("plugin.serialization") version "2.3.10"
     application
 }
 
@@ -26,7 +27,11 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql:10.6.0")
     implementation("io.ktor:ktor-server-auth:${ktorVersion}")
     implementation("io.ktor:ktor-server-auth-jwt:${ktorVersion}")
+    implementation("io.ktor:ktor-server-content-negotiation:${ktorVersion}")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:${ktorVersion}")
     implementation("com.auth0:jwks-rsa:0.22.1")
+    implementation("com.auth0:java-jwt:4.5.0")
+    implementation("com.fasterxml.uuid:java-uuid-generator:5.1.0")
     implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
     // DB
     implementation("org.jooq:jooq:3.16.6")
@@ -36,6 +41,9 @@ dependencies {
     implementation("com.zaxxer:HikariCP:5.1.0")
 
     testImplementation(kotlin("test"))
+    testImplementation(kotlin("test-junit5"))
+    testImplementation("io.ktor:ktor-server-test-host:$ktorVersion")
+    testImplementation("com.auth0:java-jwt:4.5.0")
 }
 
 kotlin {
@@ -44,4 +52,9 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
+    testLogging {
+        events("passed", "failed", "skipped")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStandardStreams = true
+    }
 }
