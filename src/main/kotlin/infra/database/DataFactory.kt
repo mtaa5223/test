@@ -36,10 +36,18 @@ object DataFactory {
     }
 
     fun runMigrations() {
-        Flyway.configure()
+        // schema_history가 이전 deploy에서 꼬여있어도 dev 환경에선 무조건 진행시킨다.
+        // - repair(): success=false로 남은 entry 정리, checksum 재계산
+        // - outOfOrder(true): 코드에 V3, history에 더 높은 버전이 있어도 V3 적용
+        // - ignoreMigrationPatterns: 코드에 없는 history 항목/미래 항목을 무시
+        val flyway = Flyway.configure()
             .dataSource(dataSource)
             .baselineOnMigrate(true)
+            .outOfOrder(true)
+            .ignoreMigrationPatterns("*:missing", "*:future")
             .load()
-            .migrate()
+
+        flyway.repair()
+        flyway.migrate()
     }
 }

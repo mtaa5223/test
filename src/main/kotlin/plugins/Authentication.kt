@@ -52,7 +52,7 @@ fun Application.configureAppAuthentication(
 ) {
     authentication {
         jwt("app") {
-            realm = "trinitys"
+            realm = "trinity"
             verifier(appJwtConfig.verifier)
             validate { cred ->
                 val sub = cred.payload.subject ?: return@validate null

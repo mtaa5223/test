@@ -27,7 +27,7 @@ fun Application.module() {
     configureUgsAuthentication(graph.infra.ugsJwtConfig)
     configureAppAuthentication(
         appJwtConfig = graph.infra.appJwtConfig,
-        dsl = com.example.infra.database.DataFactory.context,
+        dsl = DataFactory.context,
         sessionRepository = graph.repositories.sessionRepository,
     )
     configureRouting(graph.useCases)
