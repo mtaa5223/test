@@ -14,12 +14,19 @@ import io.ktor.server.auth.authentication
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.response.respond
 import org.jooq.DSLContext
+import org.slf4j.LoggerFactory
 import java.util.UUID
+
+private val ugsAuthLog = LoggerFactory.getLogger("com.example.UgsAuth")
 
 fun Application.configureUgsAuthentication(
     ugsJwtConfig: UgsJwtConfig = UgsJwtConfig(UgsProperties.from(this)),
 ) {
     val validator = UgsClaimsValidator()
+    ugsAuthLog.info(
+        "UGS auth configured: issuer={} upidAudience={} envIdAudience={}",
+        ugsJwtConfig.issuer, ugsJwtConfig.upidAudience, ugsJwtConfig.envIdAudience
+    )
     authentication {
         jwt("ugs") {
             realm = "trinity"
@@ -29,16 +36,26 @@ fun Application.configureUgsAuthentication(
                 acceptLeeway(60)
             }
             validate { cred ->
+                val tokenAud = cred.payload.audience
+                val tokenIss = cred.payload.issuer
+                val tokenType = cred.payload.getClaim("token_type").asString()
+                val provider = cred.payload.getClaim("sign_in_provider").asString()
+                ugsAuthLog.info(
+                    "UGS token entered validate(): iss={} aud={} token_type={} provider={} sub={} jti={}",
+                    tokenIss, tokenAud, tokenType, provider, cred.payload.subject, cred.payload.id
+                )
+
                 val input = UgsClaimsInput(
                     sub = cred.payload.subject,
                     jti = cred.payload.id,
                     expiresAt = cred.payload.expiresAt?.toInstant(),
                     issuedAt = cred.payload.issuedAt?.toInstant(),
-                    signInProvider = cred.payload.getClaim("sign_in_provider").asString(),
+                    signInProvider = provider,
                 )
                 validator.validate(input)?.let { UgsPrincipal(it) }
             }
-            challenge { _, _ ->
+            challenge { defaultScheme, realm ->
+                ugsAuthLog.warn("UGS auth challenged (scheme={} realm={}): token rejected by verifier (likely audience/issuer/signature/exp mismatch)", defaultScheme, realm)
                 call.respond(HttpStatusCode.Unauthorized)
             }
         }

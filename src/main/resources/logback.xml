@@ -11,4 +11,9 @@
 
     <logger name="org.eclipse.jetty" level="WARN"/>
     <logger name="io.netty" level="WARN"/>
+
+    <!-- JWT 검증 실패 사유를 추적하기 위한 임시 디버그 로깅. 401 원인 좁힌 뒤 다시 INFO로 낮춰도 됨. -->
+    <logger name="io.ktor.server.auth" level="TRACE"/>
+    <logger name="io.ktor.auth.jwt" level="TRACE"/>
+    <logger name="com.auth0" level="DEBUG"/>
 </configuration>
